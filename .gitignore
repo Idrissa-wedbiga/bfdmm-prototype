@@ -36,3 +36,4 @@ reports/*.xml
 # K3s
 kubeconfig
 *.kubeconfig
+.idea/
