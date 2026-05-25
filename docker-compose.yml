@@ -1,6 +1,5 @@
-version: '3.8'
-
 services:
+  # Base de données application BFDMM
   postgres:
     image: postgres:16-alpine
     container_name: bfdmm-postgres
@@ -20,13 +19,34 @@ services:
     networks:
       - bfdmm-network
 
+  # Base de données dédiée SonarQube
+  postgres-sonar:
+    image: postgres:16-alpine
+    container_name: bfdmm-postgres-sonar
+    environment:
+      POSTGRES_DB: sonarqube_db
+      POSTGRES_USER: sonar_user
+      POSTGRES_PASSWORD: sonar_pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_sonar_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonar_user -d sonarqube_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bfdmm-network
+
+  # SonarQube connecté à sa propre base
   sonarqube:
     image: sonarqube:community
     container_name: bfdmm-sonarqube
     environment:
-      SONAR_JDBC_URL: jdbc:postgresql://postgres:5432/bfdmm_db
-      SONAR_JDBC_USERNAME: bfdmm_user
-      SONAR_JDBC_PASSWORD: bfdmm_pass
+      SONAR_JDBC_URL: jdbc:postgresql://postgres-sonar:5433/sonarqube_db
+      SONAR_JDBC_USERNAME: sonar_user
+      SONAR_JDBC_PASSWORD: sonar_pass
     ports:
       - "9000:9000"
     volumes:
@@ -34,7 +54,7 @@ services:
       - sonarqube_logs:/opt/sonarqube/logs
       - sonarqube_extensions:/opt/sonarqube/extensions
     depends_on:
-      postgres:
+      postgres-sonar:
         condition: service_healthy
     networks:
       - bfdmm-network
@@ -45,6 +65,7 @@ networks:
 
 volumes:
   postgres_data:
+  postgres_sonar_data:
   sonarqube_data:
   sonarqube_logs:
   sonarqube_extensions:
