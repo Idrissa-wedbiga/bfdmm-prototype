@@ -1,0 +1,44 @@
+<div class="form-container">
+  <h1>{{ isEdit() ? 'Modifier' : 'Nouveau' }} Document</h1>
+
+  <form (ngSubmit)="save()">
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Titre</mat-label>
+      <input matInput [(ngModel)]="document.titre" name="titre" required />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Contenu</mat-label>
+      <textarea matInput [(ngModel)]="document.contenu" name="contenu"
+                rows="5"></textarea>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Ministère</mat-label>
+      <mat-select [(ngModel)]="document.ministere" name="ministere" required>
+        @for (m of ministeres; track m) {
+        <mat-option [value]="m">{{ m }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Classification</mat-label>
+      <mat-select [(ngModel)]="document.classification"
+                  name="classification" required>
+        @for (c of classifications; track c) {
+        <mat-option [value]="c">{{ c }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <div class="form-actions">
+      <button mat-button routerLink="/documents">
+        <mat-icon>arrow_back</mat-icon> Annuler
+      </button>
+      <button mat-raised-button color="primary" type="submit">
+        <mat-icon>save</mat-icon> Enregistrer
+      </button>
+    </div>
+  </form>
+</div>

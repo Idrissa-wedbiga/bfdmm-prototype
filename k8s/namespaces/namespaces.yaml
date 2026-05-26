@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bfdmm-dev
+  labels:
+    app: bfdmm
+    env: development
+    project: bfdmm-prototype
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bfdmm-staging
+  labels:
+    app: bfdmm
+    env: staging
+    project: bfdmm-prototype
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bfdmm-prod
+  labels:
+    app: bfdmm
+    env: production
+    project: bfdmm-prototype

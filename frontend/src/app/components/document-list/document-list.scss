@@ -1,0 +1,19 @@
+.list-container {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+.full-width { width: 100%; }
+.empty { text-align: center; padding: 2rem; color: #666; }
+mat-chip {
+  &.public { background: #e8f5e9; color: #2e7d32; }
+  &.interne { background: #e3f2fd; color: #1565c0; }
+  &.confidentiel { background: #fff3e0; color: #e65100; }
+  &.secret { background: #fce4ec; color: #b71c1c; }
+}

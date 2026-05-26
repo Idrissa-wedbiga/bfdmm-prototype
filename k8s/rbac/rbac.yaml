@@ -1,0 +1,69 @@
+# ServiceAccount Backend
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: bfdmm-backend-sa
+  namespace: bfdmm-staging
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: bfdmm-backend-sa
+  namespace: bfdmm-prod
+---
+# Role — droits minimaux
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: bfdmm-backend-role
+  namespace: bfdmm-staging
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: bfdmm-backend-role
+  namespace: bfdmm-prod
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+---
+# RoleBinding staging
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: bfdmm-backend-rolebinding
+  namespace: bfdmm-staging
+subjects:
+  - kind: ServiceAccount
+    name: bfdmm-backend-sa
+    namespace: bfdmm-staging
+roleRef:
+  kind: Role
+  apiGroup: rbac.authorization.k8s.io
+  name: bfdmm-backend-role
+---
+# RoleBinding prod
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: bfdmm-backend-rolebinding
+  namespace: bfdmm-prod
+subjects:
+  - kind: ServiceAccount
+    name: bfdmm-backend-sa
+    namespace: bfdmm-prod
+roleRef:
+  kind: Role
+  apiGroup: rbac.authorization.k8s.io
+  name: bfdmm-backend-role

@@ -1,0 +1,45 @@
+<div class="dashboard-container">
+  <h1>BFDMM — Tableau de bord</h1>
+  <p class="subtitle">Burkina Faso DevSecOps Maturity Model — Prototype N1-Silos</p>
+
+  <div class="cards-grid">
+    <mat-card class="stat-card">
+      <mat-card-header>
+        <mat-icon mat-card-avatar>folder</mat-icon>
+        <mat-card-title>Total Documents</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <span class="stat-number">{{ totalDocuments() }}</span>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="stat-card">
+      <mat-card-header>
+        <mat-icon mat-card-avatar color="primary">public</mat-icon>
+        <mat-card-title>Documents Publics</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <span class="stat-number green">{{ documentsPublics() }}</span>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-card class="stat-card">
+      <mat-card-header>
+        <mat-icon mat-card-avatar color="warn">lock</mat-icon>
+        <mat-card-title>Documents Confidentiels</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <span class="stat-number red">{{ documentsConfidentiels() }}</span>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <div class="actions">
+    <button mat-raised-button color="primary" routerLink="/documents">
+      <mat-icon>list</mat-icon> Voir les documents
+    </button>
+    <button mat-raised-button color="accent" routerLink="/documents/new">
+      <mat-icon>add</mat-icon> Nouveau document
+    </button>
+  </div>
+</div>

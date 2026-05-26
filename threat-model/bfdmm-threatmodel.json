@@ -1,0 +1,74 @@
+{
+  "summary": {
+    "title": "BFDMM Threat Model",
+    "owner": "BFDMM Research",
+    "description": "Modele de menaces STRIDE pour prototype BFDMM",
+    "id": 1
+  },
+  "detail": {
+    "contributors": [],
+    "diagrams": [
+      {
+        "id": 1,
+        "title": "Architecture BFDMM",
+        "diagramType": "STRIDE",
+        "threats": [
+          {
+            "id": "T1",
+            "title": "Spoofing utilisateur",
+            "type": "Spoofing",
+            "status": "Mitigated",
+            "severity": "High",
+            "description": "Usurpation identite via API",
+            "mitigation": "JWT + OAuth2 implementes"
+          },
+          {
+            "id": "T2",
+            "title": "Tampering PostgreSQL",
+            "type": "Tampering",
+            "status": "Mitigated",
+            "severity": "High",
+            "description": "Injection SQL sur base de donnees",
+            "mitigation": "Requetes parametrees JPA"
+          },
+          {
+            "id": "T3",
+            "title": "Repudiation actions",
+            "type": "Repudiation",
+            "status": "Mitigated",
+            "severity": "Medium",
+            "description": "Deni d actions effectuees",
+            "mitigation": "Logs Falco immuables"
+          },
+          {
+            "id": "T4",
+            "title": "Info Disclosure secrets",
+            "type": "Information disclosure",
+            "status": "Mitigated",
+            "severity": "Critical",
+            "description": "Exposition secrets applicatifs",
+            "mitigation": "HashiCorp Vault configure"
+          },
+          {
+            "id": "T5",
+            "title": "DoS pods K3s",
+            "type": "Denial of service",
+            "status": "Mitigated",
+            "severity": "Medium",
+            "description": "Deni de service sur pods",
+            "mitigation": "Resource Limits + HPA K3s"
+          },
+          {
+            "id": "T6",
+            "title": "Elevation privileges RBAC",
+            "type": "Elevation of privilege",
+            "status": "Mitigated",
+            "severity": "High",
+            "description": "Elevation privileges cluster",
+            "mitigation": "RBAC granulaire + PSS Restricted"
+          }
+        ]
+      }
+    ]
+  }
+}

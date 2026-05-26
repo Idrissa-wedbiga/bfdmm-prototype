@@ -1,0 +1,15 @@
+<mat-toolbar color="primary">
+  <mat-icon>shield</mat-icon>
+  <span style="margin-left: 8px; font-weight: 700;">BFDMM Prototype</span>
+  <span class="spacer"></span>
+  <button mat-button routerLink="/dashboard" routerLinkActive="active-link">
+    <mat-icon>dashboard</mat-icon> Dashboard
+  </button>
+  <button mat-button routerLink="/documents" routerLinkActive="active-link">
+    <mat-icon>folder</mat-icon> Documents
+  </button>
+</mat-toolbar>
+
+<main>
+  <router-outlet />
+</main>
