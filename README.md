@@ -33,3 +33,4 @@ cd frontend && ng serve
 ## Score BFDMM
 - **Avant** : 16,38% (N1-Silos)
 - **Après** : 84,12% (N3-Defined)
+# Rebuild mar. 26 mai 2026 11:58:05 GMT
