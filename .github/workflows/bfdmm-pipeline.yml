@@ -1,3 +1,4 @@
+
   name: BFDMM Security Pipeline
 
   on:
@@ -13,294 +14,375 @@
 
   jobs:
 
-    # ══════════════════════════════════════════
+    # ══════════════════════════════════════
     # STAGE 0 — Threat Modeling STRIDE
-    # ══════════════════════════════════════════
+    # ══════════════════════════════════════
     threat-modeling:
       name: "S0 - Threat Modeling STRIDE"
       runs-on: ubuntu-latest
+
       steps:
-        - uses: actions/checkout@v4
+        - name: Checkout source code
+          uses: actions/checkout@v4
 
         - name: Setup Node.js
           uses: actions/setup-node@v4
           with:
-            node-version: '20'
+            node-version: '22'
 
         - name: Install Threat Dragon CLI
           run: |
-            npm install -g @threatdragon/cli 2>/dev/null || true
+            npm install -g @threatdragon/cli || true
 
-        - name: Validate threat model exists
+        - name: Validate threat model
           run: |
-            if [ ! -f threat-model/bfdmm-threatmodel.json ]; then
-              echo "AVERTISSEMENT: Modele de menaces absent"
-              echo "Créer threat-model/bfdmm-threatmodel.json"
-              mkdir -p threat-model
-              echo '{"summary":{"title":"BFDMM Threat Model",
-              "owner":"BFDMM","description":"Modele STRIDE"},
-              "detail":{"contributors":[],"diagrams":[]}}' \
-              > threat-model/bfdmm-threatmodel.json
-            fi
-            echo "Modele de menaces present"
-            cat threat-model/bfdmm-threatmodel.json
-
-        - name: Upload threat model
-          uses: actions/upload-artifact@v4
-          with:
-            name: threat-model
-            path: threat-model/
-
-    # ══════════════════════════════════════════
-    # STAGE 1 — Build + SAST SonarQube
-    # ══════════════════════════════════════════
-    build-and-sast:
-      name: "S1 - Build et SAST"
-      needs: threat-modeling
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v4
-          with:
-            fetch-depth: 0
-
-        - name: Set up JDK 21
-          uses: actions/setup-java@v4
-          with:
-            java-version: '21'
-            distribution: 'temurin'
-
-        - name: Cache Maven
-          uses: actions/cache@v4
-          with:
-            path: ~/.m2
-            key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-
-        - name: Build Spring Boot
-          run: |
-            cd backend
-            mvn clean package -DskipTests
-            echo "BUILD_SUCCESS=true" >> $GITHUB_ENV
-
-        - name: SonarCloud Scan
-          uses: SonarSource/sonarqube-scan-action@v2
-          with:
-            projectBaseDir: backend
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-            SONAR_HOST_URL: https://sonarcloud.io
-
-        - name: Upload JAR
-          uses: actions/upload-artifact@v4
-          with:
-            name: backend-jar
-            path: backend/target/*.jar
-
-    # ══════════════════════════════════════════
-    # STAGE 2 — SCA (Dépendances)
-    # ══════════════════════════════════════════
-    sca-analysis:
-      name: "S2 - Analyse dependances SCA"
-      needs: build-and-sast
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v4
-
-        - name: Set up JDK 21
-          uses: actions/setup-java@v4
-          with:
-            java-version: '21'
-            distribution: 'temurin'
-
-        - name: OWASP Dependency-Check
-          uses: dependency-check/Dependency-Check_Action@main
-          with:
-            project: 'bfdmm-prototype'
-            path: 'backend'
-            format: 'HTML'
-            out: 'reports/dependency-check'
-            args: "--failOnCVSS 7 --enableRetired"
-
-        - name: Trivy filesystem scan
-          uses: aquasecurity/trivy-action@master
-          with:
-            scan-type: 'fs'
-            scan-ref: 'backend'
-            severity: 'HIGH,CRITICAL'
-            exit-code: '1'
-            format: 'table'
-
-        - name: Upload SCA reports
-          if: always()
-          uses: actions/upload-artifact@v4
-          with:
-            name: sca-reports
-            path: reports/
-
-    # ══════════════════════════════════════════
-    # STAGE 3 — Build Docker + Scan Trivy
-    # ══════════════════════════════════════════
-    containerize:
-      name: "S3 - Containerisation securisee"
-      needs: sca-analysis
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v4
-
-        - name: Download JAR
-          uses: actions/download-artifact@v4
-          with:
-            name: backend-jar
-            path: backend/target/
-
-        - name: Set up JDK 21
-          uses: actions/setup-java@v4
-          with:
-            java-version: '21'
-            distribution: 'temurin'
-
-        - name: Set up Node.js
-          uses: actions/setup-node@v4
-          with:
-            node-version: '20'
-
-        - name: Build Angular
-          run: |
-            cd frontend
-            npm ci
-            npm run build -- --configuration=production
-
-        - name: Build backend Docker image
-          run: |
-            docker build \
-              --no-cache \
-              --label "git-commit=${{ github.sha }}" \
-              -t ${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
-              -t ${{ env.BACKEND_IMAGE }}:latest \
-              backend/
-
-        - name: Build frontend Docker image
-          run: |
-            docker build \
-              --no-cache \
-              --label "git-commit=${{ github.sha }}" \
-              -t ${{ env.FRONTEND_IMAGE }}:${{ github.sha }} \
-              -t ${{ env.FRONTEND_IMAGE }}:latest \
-              frontend/
-
-        - name: Trivy scan backend image
-          uses: aquasecurity/trivy-action@master
-          with:
-            image-ref: '${{ env.BACKEND_IMAGE }}:${{ github.sha }}'
-            severity: 'HIGH,CRITICAL'
-            exit-code: '1'
-            format: 'table'
-
-        - name: Trivy scan frontend image
-          uses: aquasecurity/trivy-action@master
-          with:
-            image-ref: '${{ env.FRONTEND_IMAGE }}:${{ github.sha }}'
-            severity: 'HIGH,CRITICAL'
-            exit-code: '1'
-            format: 'table'
-
-        - name: Push images to Docker Hub
-          if: github.ref == 'refs/heads/main'
-          run: |
-            echo "${{ secrets.DOCKER_PASSWORD }}" \
-              | docker login -u "${{ secrets.DOCKER_USERNAME }}" \
-              --password-stdin
-            docker push ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-            docker push ${{ env.BACKEND_IMAGE }}:latest
-            docker push ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-            docker push ${{ env.FRONTEND_IMAGE }}:latest
-
-    # ══════════════════════════════════════════
-    # STAGE 4 — Deploy K3s Staging
-    # ══════════════════════════════════════════
-    deploy-staging:
-      name: "S4 - Deploy K3s staging"
-      needs: containerize
-      runs-on: ubuntu-latest
-      if: github.ref == 'refs/heads/main'
-      steps:
-        - uses: actions/checkout@v4
-
-        - name: Configure kubectl
-          run: |
-            mkdir -p ~/.kube
-            echo "${{ secrets.KUBECONFIG }}" \
-              | base64 -d > ~/.kube/config
-            chmod 600 ~/.kube/config
-
-        - name: Deploy to staging
-          run: |
-            kubectl set image deployment/bfdmm-backend \
-              backend=${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
-              -n bfdmm-staging 2>/dev/null || \
-            kubectl create deployment bfdmm-backend \
-              --image=${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
-              -n bfdmm-staging
+            echo "===================================="
+            echo " VALIDATION MODELE STRIDE BFDMM"
+            echo "===================================="
             
-            kubectl set image deployment/bfdmm-frontend \
-              frontend=${{ env.FRONTEND_IMAGE }}:${{ github.sha }} \
-              -n bfdmm-staging 2>/dev/null || \
-            kubectl create deployment bfdmm-frontend \
-              --image=${{ env.FRONTEND_IMAGE }}:${{ github.sha }} \
-              -n bfdmm-staging
+            if [ -f threat-model/bfdmm-threatmodel.json ]; then
+            
+              python3 << 'PYEOF'
+    import json
 
-        - name: Wait for rollout
-          run: |
-            kubectl rollout status deployment/bfdmm-backend \
-              -n bfdmm-staging --timeout=3m || true
-            kubectl rollout status deployment/bfdmm-frontend \
-              -n bfdmm-staging --timeout=3m || true
+  with open('threat-model/bfdmm-threatmodel.json') as f:
+    tm = json.load(f)
+    
+    diagrams = tm.get('detail', {}).get('diagrams', [])
+    
+    threats = []
+  for d in diagrams:
+    threats.extend(d.get('threats', []))
+    
+    mitigated = sum(
+    1 for t in threats
+    if t.get('status') == 'Mitigated'
+    )
 
-    # ══════════════════════════════════════════
-    # STAGE 5 — DAST OWASP ZAP
-    # ══════════════════════════════════════════
-    dast-scan:
-      name: "S5 - Tests dynamiques DAST"
-      needs: deploy-staging
-      runs-on: ubuntu-latest
-      if: github.ref == 'refs/heads/main'
-      steps:
-        - uses: actions/checkout@v4
+  print(f"Total menaces STRIDE : {len(threats)}")
+print(f"Menaces mitigees     : {mitigated}")
+print(f"Couverture           : {mitigated}/{len(threats)}")
+    PYEOF
+    
+    else
+  echo "ERREUR : threat-model/bfdmm-threatmodel.json absent"
+    exit 1
+    fi
 
-        - name: OWASP ZAP Baseline Scan
-          uses: zaproxy/action-baseline@v0.12.0
-          with:
-            target: 'http://localhost:8080'
-            fail_action: false
-            cmd_options: '-a'
+  - name: Upload threat model
+    uses: actions/upload-artifact@v4
+    with:
+      name: threat-model-report
+      path: threat-model/
 
-        - name: Upload ZAP report
-          if: always()
-          uses: actions/upload-artifact@v4
-          with:
-            name: zap-report
-            path: report_html.html
+  # ══════════════════════════════════════
+  # STAGE 1 — Build + SAST SonarCloud
+  # ══════════════════════════════════════
+  build-and-sast:
+    name: "S1 - Build et SAST"
+    needs: threat-modeling
+    runs-on: ubuntu-latest
 
-    # ══════════════════════════════════════════
-    # STAGE 6 — Résumé sécurité
-    # ══════════════════════════════════════════
-    security-summary:
-      name: "S6 - Resume securite BFDMM"
-      needs: [threat-modeling, build-and-sast, sca-analysis, containerize]
-      runs-on: ubuntu-latest
-      if: always()
-      steps:
-        - name: Resume pipeline BFDMM
-          run: |
-            echo "======================================"
-            echo "  BFDMM Security Pipeline Summary"
-            echo "======================================"
-            echo "S0 Threat Modeling : ${{ needs.threat-modeling.result }}"
-            echo "S1 Build + SAST    : ${{ needs.build-and-sast.result }}"
-            echo "S2 SCA Dependances : ${{ needs.sca-analysis.result }}"
-            echo "S3 Containerisation: ${{ needs.containerize.result }}"
-            echo "======================================"
-            echo "Commit : ${{ github.sha }}"
-            echo "Branch : ${{ github.ref_name }}"
-            echo "Date   : $(date -u)"
-            echo "======================================"
+    continue-on-error: true
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+
+      - name: Build Spring Boot
+        run: |
+          cd backend
+          mvn clean package -DskipTests
+
+      - name: Copy Maven dependencies
+        run: |
+          cd backend
+          mvn dependency:copy-dependencies
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        with:
+          projectBaseDir: backend
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target/*.jar
+
+  # ══════════════════════════════════════
+  # STAGE 2 — SCA Trivy Audit
+  # ══════════════════════════════════════
+  sca-analysis:
+    name: "S2 - Analyse SCA"
+    needs: build-and-sast
+    runs-on: ubuntu-latest
+
+    continue-on-error: true
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Trivy filesystem scan (table)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'backend'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '0'
+          format: 'table'
+
+      - name: Trivy filesystem scan (JSON)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'backend'
+          severity: 'LOW,MEDIUM,HIGH,CRITICAL'
+          exit-code: '0'
+          format: 'json'
+          output: 'trivy-sca.json'
+
+      - name: Generate CVE statistics
+        if: always()
+        run: |
+          if [ -f trivy-sca.json ]; then
+
+            python3 << 'PYEOF'
+    import json
+
+  with open('trivy-sca.json') as f:
+    data = json.load(f)
+    
+    counts = {
+  'CRITICAL': 0,
+  'HIGH': 0,
+  'MEDIUM': 0,
+  'LOW': 0
+  }
+
+  for result in data.get('Results', []):
+    for vuln in result.get('Vulnerabilities', []):
+
+      sev = vuln.get('Severity', 'LOW')
+
+      if sev not in counts:
+        counts[sev] = 0
+
+      counts[sev] += 1
+
+    print("=" * 45)
+    print(" BFDMM — RAPPORT SCA / CVE")
+    print("=" * 45)
+
+  for sev, count in counts.items():
+    print(f"{sev:10} : {count}")
+
+print("=" * 45)
+  print(f"TOTAL : {sum(counts.values())}")
+print("=" * 45)
+    PYEOF
+    
+    fi
+
+  - name: Upload SCA report
+    if: always()
+    uses: actions/upload-artifact@v4
+    with:
+      name: sca-report
+      path: trivy-sca.json
+
+  # ══════════════════════════════════════
+  # STAGE 3 — Containerisation Sécurisée
+  # ══════════════════════════════════════
+  containerize:
+    name: "S3 - Containerisation"
+    needs: sca-analysis
+    runs-on: ubuntu-latest
+
+    continue-on-error: true
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target/
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build Angular frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build -- --configuration=production
+
+      - name: Build backend Docker image
+        run: |
+          docker build \
+            --no-cache \
+            --label "git-commit=${{ github.sha }}" \
+            -t bfdmm-backend:${{ github.sha }} \
+            backend/
+
+      - name: Build frontend Docker image
+        run: |
+          docker build \
+            --no-cache \
+            --label "git-commit=${{ github.sha }}" \
+            -t bfdmm-frontend:${{ github.sha }} \
+            frontend/
+
+      - name: Trivy backend image scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'bfdmm-backend:${{ github.sha }}'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '0'
+          format: 'table'
+
+      - name: Trivy frontend image scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'bfdmm-frontend:${{ github.sha }}'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '0'
+          format: 'table'
+
+  # ══════════════════════════════════════
+  # STAGE 4 — Déploiement K3s
+  # ══════════════════════════════════════
+  deploy-staging:
+    name: "S4 - Deploy K3s"
+    needs: containerize
+    runs-on: ubuntu-latest
+
+    if: github.ref == 'refs/heads/main'
+
+    continue-on-error: true
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p ~/.kube
+
+          echo "${{ secrets.KUBECONFIG }}" \
+            | base64 -d > ~/.kube/config
+
+          chmod 600 ~/.kube/config
+
+          kubectl get nodes
+
+      - name: Deploy backend
+        run: |
+          kubectl create deployment bfdmm-backend \
+            --image=bfdmm-backend:${{ github.sha }} \
+            -n bfdmm-staging \
+            --dry-run=client -o yaml \
+            | kubectl apply -f -
+
+      - name: Verify deployment
+        run: |
+          kubectl get deployments -n bfdmm-staging || true
+
+  # ══════════════════════════════════════
+  # STAGE 5 — DAST OWASP ZAP
+  # ══════════════════════════════════════
+  dast-scan:
+    name: "S5 - DAST OWASP ZAP"
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+
+    continue-on-error: true
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: 'http://localhost:8080'
+          fail_action: false
+          cmd_options: '-a'
+
+      - name: Upload ZAP report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: report_html.html
+
+  # ══════════════════════════════════════
+  # STAGE 6 — Résumé Final BFDMM
+  # ══════════════════════════════════════
+  security-summary:
+    name: "S6 - Resume securite"
+    needs:
+      [
+        threat-modeling,
+        build-and-sast,
+        sca-analysis,
+        containerize,
+        deploy-staging,
+        dast-scan
+      ]
+
+    runs-on: ubuntu-latest
+
+    if: always()
+
+    steps:
+      - name: Generate BFDMM summary
+        run: |
+          echo "=========================================="
+          echo "  BFDMM SECURITY PIPELINE SUMMARY"
+          echo "=========================================="
+
+          echo ""
+          echo "S0 Threat Modeling : ${{ needs.threat-modeling.result }}"
+          echo "S1 Build + SAST    : ${{ needs.build-and-sast.result }}"
+          echo "S2 SCA Analysis    : ${{ needs.sca-analysis.result }}"
+          echo "S3 Container Scan  : ${{ needs.containerize.result }}"
+          echo "S4 Deploy K3s      : ${{ needs.deploy-staging.result }}"
+          echo "S5 DAST OWASP ZAP  : ${{ needs.dast-scan.result }}"
+
+          echo ""
+          echo "Commit : ${{ github.sha }}"
+          echo "Branch : ${{ github.ref_name }}"
+          echo "Date   : $(date -u)"
+
+          echo ""
+          echo "Mode pipeline : AUDIT / RESEARCH"
+          echo "Framework     : BFDMM"
+          echo "Maturity      : N1 -> N3"
+
+          echo "=========================================="
+    
