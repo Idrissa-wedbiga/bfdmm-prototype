@@ -45,35 +45,35 @@
               python3 << 'PYEOF'
             import json
 
-  with open('threat-model/bfdmm-threatmodel.json') as f:
-    tm = json.load(f)
+            with open('threat-model/bfdmm-threatmodel.json') as f:
+              tm = json.load(f)
     
-    diagrams = tm.get('detail', {}).get('diagrams', [])
+            diagrams = tm.get('detail', {}).get('diagrams', [])
     
-    threats = []
-  for d in diagrams:
-    threats.extend(d.get('threats', []))
+            threats = []
+            for d in diagrams:
+            threats.extend(d.get('threats', []))
     
-    mitigated = sum(
-    1 for t in threats
-    if t.get('status') == 'Mitigated'
-    )
+            mitigated = sum(
+            1 for t in threats
+            if t.get('status') == 'Mitigated'
+            )
 
-  print(f"Total menaces STRIDE : {len(threats)}")
-  print(f"Menaces mitigees     : {mitigated}")
-  print(f"Couverture           : {mitigated}/{len(threats)}")
-    PYEOF
+            print(f"Total menaces STRIDE : {len(threats)}")
+            print(f"Menaces mitigees     : {mitigated}")
+            print(f"Couverture           : {mitigated}/{len(threats)}")
+            PYEOF
     
-    else
-      echo "ERREUR : threat-model/bfdmm-threatmodel.json absent"
-    exit 1
-    fi
+            else
+              echo "ERREUR : threat-model/bfdmm-threatmodel.json absent"
+            exit 1
+            fi
 
-  - name: Upload threat model
-    uses: actions/upload-artifact@v4
-    with:
-      name: threat-model-report
-      path: threat-model/
+        - name: Upload threat model
+          uses: actions/upload-artifact@v4
+          with:
+            name: threat-model-report
+            path: threat-model/
 
   # ══════════════════════════════════════
   # STAGE 1 — Build + SAST SonarCloud
