@@ -52,7 +52,7 @@ jobs:
           
           threats = []
           for d in diagrams:
-          threats.extend(d.get('threats', []))
+            threats.extend(d.get('threats', []))
           
           mitigated = sum(
           1 for t in threats
