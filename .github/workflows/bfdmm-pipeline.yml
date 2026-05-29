@@ -118,10 +118,8 @@
             project: 'bfdmm-prototype'
             path: 'backend'
             format: 'HTML'
-            args: >
-              --failOnCVSS 7
-              --enableRetired
-              --out reports/dependency-check
+            out: 'reports/dependency-check'
+            args: "--failOnCVSS 7 --enableRetired"
 
         - name: Trivy filesystem scan
           uses: aquasecurity/trivy-action@master
