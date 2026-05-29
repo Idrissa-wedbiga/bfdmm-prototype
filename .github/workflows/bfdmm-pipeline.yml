@@ -43,7 +43,7 @@
             if [ -f threat-model/bfdmm-threatmodel.json ]; then
             
               python3 << 'PYEOF'
-    import json
+            import json
 
   with open('threat-model/bfdmm-threatmodel.json') as f:
     tm = json.load(f)
@@ -60,12 +60,12 @@
     )
 
   print(f"Total menaces STRIDE : {len(threats)}")
-print(f"Menaces mitigees     : {mitigated}")
-print(f"Couverture           : {mitigated}/{len(threats)}")
+  print(f"Menaces mitigees     : {mitigated}")
+  print(f"Couverture           : {mitigated}/{len(threats)}")
     PYEOF
     
     else
-  echo "ERREUR : threat-model/bfdmm-threatmodel.json absent"
+      echo "ERREUR : threat-model/bfdmm-threatmodel.json absent"
     exit 1
     fi
 
@@ -166,49 +166,49 @@ print(f"Couverture           : {mitigated}/{len(threats)}")
         run: |
           if [ -f trivy-sca.json ]; then
 
-            python3 << 'PYEOF'
-    import json
+             python3 << 'PYEOF'
+          import json
 
-  with open('trivy-sca.json') as f:
-    data = json.load(f)
+          with open('trivy-sca.json') as f:
+             data = json.load(f)
     
-    counts = {
-  'CRITICAL': 0,
-  'HIGH': 0,
-  'MEDIUM': 0,
-  'LOW': 0
-  }
+          counts = {
+            'CRITICAL': 0,
+            'HIGH': 0,
+            'MEDIUM': 0,
+            'LOW': 0
+          }
 
-  for result in data.get('Results', []):
-    for vuln in result.get('Vulnerabilities', []):
+          for result in data.get('Results', []):
+            for vuln in result.get('Vulnerabilities', []):
 
-      sev = vuln.get('Severity', 'LOW')
+              sev = vuln.get('Severity', 'LOW')
 
-      if sev not in counts:
-        counts[sev] = 0
+              if sev not in counts:
+                counts[sev] = 0
 
-      counts[sev] += 1
+              counts[sev] += 1
 
-    print("=" * 45)
-    print(" BFDMM — RAPPORT SCA / CVE")
-    print("=" * 45)
+          print("=" * 45)
+          print(" BFDMM — RAPPORT SCA / CVE")
+          print("=" * 45)
 
-  for sev, count in counts.items():
-    print(f"{sev:10} : {count}")
+          for sev, count in counts.items():
+            print(f"{sev:10} : {count}")
 
-print("=" * 45)
-  print(f"TOTAL : {sum(counts.values())}")
-print("=" * 45)
-    PYEOF
+          print("=" * 45)
+          print(f"TOTAL : {sum(counts.values())}")
+          print("=" * 45)
+          PYEOF
     
-    fi
+          fi
 
-  - name: Upload SCA report
-    if: always()
-    uses: actions/upload-artifact@v4
-    with:
-      name: sca-report
-      path: trivy-sca.json
+      - name: Upload SCA report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sca-report
+          path: trivy-sca.json
 
   # ══════════════════════════════════════
   # STAGE 3 — Containerisation Sécurisée
