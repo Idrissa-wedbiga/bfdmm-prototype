@@ -316,7 +316,6 @@ jobs:
       - name: Create namespace
         run: kubectl create namespace bfdmm-staging
 
-
       - name: Deploy backend
         run: |
           kubectl create deployment bfdmm-backend \
