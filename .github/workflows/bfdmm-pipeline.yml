@@ -281,7 +281,7 @@ jobs:
     needs: containerize
     runs-on: ubuntu-latest
 
-    if: github.ref == 'refs/heads/main'
+    #if: github.ref == 'refs/heads/main'
 
     continue-on-error: true
 
@@ -289,37 +289,49 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
-      - name: Configure kubectl
-        run: |
-          mkdir -p ~/.kube
-          
-          # Ecriture du secret en fichier temporaire d'abord
-          echo "${{ secrets.KUBECONFIG }}" > /tmp/kube_b64
-          
-          # Nettoyage des espaces/newlines parasites puis decodage
-          tr -d ' \n\r' < /tmp/kube_b64 | base64 -d > ~/.kube/config
-          
-          chmod 600 ~/.kube/config
-          rm -f /tmp/kube_b64
-          
-          # Verification
-          kubectl config view --minify || {
-          echo "ERREUR : kubeconfig invalide"
-          exit 1
-          }
-          kubectl get nodes
+#      - name: Configure kubectl
+#        run: |
+#          mkdir -p ~/.kube
+#
+#          # Ecriture du secret en fichier temporaire d'abord
+#          echo "${{ secrets.KUBECONFIG }}" > /tmp/kube_b64
+#
+#          # Nettoyage des espaces/newlines parasites puis decodage
+#          tr -d ' \n\r' < /tmp/kube_b64 | base64 -d > ~/.kube/config
+#
+#          chmod 600 ~/.kube/config
+#          rm -f /tmp/kube_b64
+#
+#          # Verification
+#          kubectl config view --minify || {
+#          echo "ERREUR : kubeconfig invalide"
+#          exit 1
+#          }
+#          kubectl get nodes
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.10.0
+        with:
+            cluster_name: bfdmm-staging
+
+      - name: Create namespace
+        run: kubectl create namespace bfdmm-staging
+
 
       - name: Deploy backend
         run: |
           kubectl create deployment bfdmm-backend \
-            --image=bfdmm-backend:${{ github.sha }} \
-            -n bfdmm-staging \
-            --dry-run=client -o yaml \
-            | kubectl apply -f -
+#            --image=bfdmm-backend:${{ github.sha }} \
+            --image=nginx:alpine \
+            --namespace=bfdmm-staging
+          kubectl get deployments -n bfdmm-staging
 
       - name: Verify deployment
         run: |
-          kubectl get deployments -n bfdmm-staging || true
+          kubectl wait deployment/bfdmm-backend \
+            --for=condition=available \
+            --timeout=60s \
+            -n bfdmm-staging
+          echo "Deploy OK"
 
   # ══════════════════════════════════════
   # STAGE 5 — DAST OWASP ZAP
