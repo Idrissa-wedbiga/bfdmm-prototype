@@ -293,11 +293,20 @@ jobs:
         run: |
           mkdir -p ~/.kube
           
-          echo "${{ secrets.KUBECONFIG }}" \
-            | base64 -d > ~/.kube/config
+          # Ecriture du secret en fichier temporaire d'abord
+          echo "${{ secrets.KUBECONFIG }}" > /tmp/kube_b64
+          
+          # Nettoyage des espaces/newlines parasites puis decodage
+          tr -d ' \n\r' < /tmp/kube_b64 | base64 -d > ~/.kube/config
           
           chmod 600 ~/.kube/config
+          rm -f /tmp/kube_b64
           
+          # Verification
+          kubectl config view --minify || {
+          echo "ERREUR : kubeconfig invalide"
+          exit 1
+          }
           kubectl get nodes
 
       - name: Deploy backend
