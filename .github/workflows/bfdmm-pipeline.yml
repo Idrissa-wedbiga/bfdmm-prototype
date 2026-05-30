@@ -320,6 +320,9 @@ jobs:
     needs: sca-analysis
     runs-on: ubuntu-latest
     continue-on-error: true
+    permissions:
+      issues: write
+      contents: read
 
     services:
       postgres:
