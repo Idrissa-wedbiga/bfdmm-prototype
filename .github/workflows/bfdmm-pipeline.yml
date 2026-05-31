@@ -339,71 +339,71 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      steps:
-        - name: Checkout source code
-          uses: actions/checkout@v4
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
 
-        - name: Setup JDK 21
-          uses: actions/setup-java@v4
-          with:
-            distribution: 'temurin'
-            java-version: '21'
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
 
-        - name: Build Spring Boot
-          run: |
-            cd backend
-            mvn clean package -DskipTests -q
+      - name: Build Spring Boot
+        run: |
+          cd backend
+          mvn clean package -DskipTests -q
 
-        - name: Start Spring Boot app
-          run: |
-            cd backend
-            nohup java -jar target/*.jar \
-              --spring.datasource.url=jdbc:postgresql://localhost:5432/bfdmm_db \
-              --spring.datasource.username=bfdmm_user \
-              --spring.datasource.password=bfdmm_pass \
-              > /tmp/app.log 2>&1 &
+      - name: Start Spring Boot app
+        run: |
+          cd backend
+          nohup java -jar target/*.jar \
+            --spring.datasource.url=jdbc:postgresql://localhost:5432/bfdmm_db \
+            --spring.datasource.username=bfdmm_user \
+            --spring.datasource.password=bfdmm_pass \
+            > /tmp/app.log 2>&1 &
+          
+          echo "Attente demarrage Spring Boot..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/actuator/health > /dev/null 2>&1; then
+              echo "App demarree apres ${i}x2s"
+              curl http://localhost:8080/actuator/health
+              break
+            fi
+            sleep 2
+          done
             
-            echo "Attente demarrage Spring Boot..."
-            for i in $(seq 1 30); do
-              if curl -sf http://localhost:8080/actuator/health > /dev/null 2>&1; then
-                echo "App demarree apres ${i}x2s"
-                curl http://localhost:8080/actuator/health
-                break
-              fi
-              sleep 2
-            done
-            
-            curl -f http://localhost:8080/actuator/health || {
-              echo "ERREUR : app non demarree - logs :"
-              cat /tmp/app.log
-              exit 1
-            }
+          curl -f http://localhost:8080/actuator/health || {
+            echo "ERREUR : app non demarree - logs :"
+            cat /tmp/app.log
+            exit 1
+          }
 
-        - name: Fix ZAP workspace permissions
-          run: sudo chmod -R 777 ${{ github.workspace }}
+      - name: Fix ZAP workspace permissions
+        run: sudo chmod -R 777 ${{ github.workspace }}
 
-        - name: OWASP ZAP Baseline Scan via Docker
-          run: |
-            docker run --network=host \
-              -v ${{ github.workspace }}:/zap/wrk/:rw \
-              ghcr.io/zaproxy/zaproxy:stable \
-              zap-baseline.py \
-                -t http://localhost:8080 \
-                -r /zap/wrk/zap-report.html \
-                -J /zap/wrk/zap-report.json \
-                -w /zap/wrk/zap-report.md \
-                -a \
-                -I
+      - name: OWASP ZAP Baseline Scan via Docker
+        run: |
+          docker run --network=host \
+            -v ${{ github.workspace }}:/zap/wrk/:rw \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+              -t http://localhost:8080 \
+              -r /zap/wrk/zap-report.html \
+              -J /zap/wrk/zap-report.json \
+              -w /zap/wrk/zap-report.md \
+              -a \
+              -I
 
-        - name: Upload ZAP report
-          if: always()
-          uses: actions/upload-artifact@v4
-          with:
-            name: zap-report
-            path: |
-              ${{ github.workspace }}/zap-report.html
-              ${{ github.workspace }}/zap-report.json
-              ${{ github.workspace }}/zap-report.md  
+      - name: Upload ZAP report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: |
+            ${{ github.workspace }}/zap-report.html
+            ${{ github.workspace }}/zap-report.json
+            ${{ github.workspace }}/zap-report.md  
 
   # ══════════════════════════════════════
   # STAGE 6 — Résumé Final BFDMM
