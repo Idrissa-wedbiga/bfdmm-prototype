@@ -312,32 +312,32 @@ jobs:
             -n bfdmm-staging
           echo "Deploy OK"
 
-    # ==========================================
+      # ==========================================
     # STAGE 5 - DAST OWASP ZAP
     # ==========================================
-    dast-scan:
-      name: "S5 - DAST OWASP ZAP"
-      needs: sca-analysis
-      runs-on: ubuntu-latest
-      continue-on-error: true
-      permissions:
-        issues: write
-        contents: read
+  dast-scan:
+    name: "S5 - DAST OWASP ZAP"
+    needs: sca-analysis
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      issues: write
+      contents: read
 
-      services:
-        postgres:
-          image: postgres:16
-          env:
-            POSTGRES_DB: bfdmm_db
-            POSTGRES_USER: bfdmm_user
-            POSTGRES_PASSWORD: bfdmm_pass
-          ports:
-            - 5432:5432
-          options: >-
-            --health-cmd pg_isready
-            --health-interval 10s
-            --health-timeout 5s
-            --health-retries 5
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: bfdmm_db
+          POSTGRES_USER: bfdmm_user
+          POSTGRES_PASSWORD: bfdmm_pass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
       steps:
         - name: Checkout source code
@@ -403,7 +403,7 @@ jobs:
             path: |
               ${{ github.workspace }}/zap-report.html
               ${{ github.workspace }}/zap-report.json
-              ${{ github.workspace }}/zap-report.md
+              ${{ github.workspace }}/zap-report.md  
 
   # ══════════════════════════════════════
   # STAGE 6 — Résumé Final BFDMM
