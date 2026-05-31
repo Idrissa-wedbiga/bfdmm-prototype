@@ -388,7 +388,7 @@ jobs:
           target: 'http://localhost:8080'
           fail_action: false
           cmd_options: '-a'
-          artifact_name: ""
+          artifact_name: zap-scan
 
       - name: Upload ZAP report
         if: always()
