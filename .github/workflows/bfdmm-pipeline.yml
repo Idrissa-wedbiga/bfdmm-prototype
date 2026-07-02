@@ -1,4 +1,3 @@
-
 name: BFDMM Security Pipeline
 
 on:
@@ -31,42 +30,36 @@ jobs:
           node-version: '22'
 
       - name: Install Threat Dragon CLI
-        run: |
-          npm install -g @threatdragon/cli || true
+        run: npm install -g @threatdragon/cli || true
 
       - name: Validate threat model
         run: |
           echo "===================================="
           echo " VALIDATION MODELE STRIDE BFDMM"
           echo "===================================="
-          
+
           if [ -f threat-model/bfdmm-threatmodel.json ]; then
-          
             python3 << 'PYEOF'
           import json
-          
+
           with open('threat-model/bfdmm-threatmodel.json') as f:
             tm = json.load(f)
-          
+
           diagrams = tm.get('detail', {}).get('diagrams', [])
-          
+
           threats = []
           for d in diagrams:
             threats.extend(d.get('threats', []))
-          
-          mitigated = sum(
-          1 for t in threats
-          if t.get('status') == 'Mitigated'
-          )
-          
+
+          mitigated = sum(1 for t in threats if t.get('status') == 'Mitigated')
+
           print(f"Total menaces STRIDE : {len(threats)}")
           print(f"Menaces mitigees     : {mitigated}")
           print(f"Couverture           : {mitigated}/{len(threats)}")
           PYEOF
-          
           else
             echo "ERREUR : threat-model/bfdmm-threatmodel.json absent"
-          exit 1
+            exit 1
           fi
 
       - name: Upload threat model
@@ -75,14 +68,13 @@ jobs:
           name: threat-model-report
           path: threat-model/
 
-# ══════════════════════════════════════
-# STAGE 1 — Build + SAST SonarCloud
-# ══════════════════════════════════════
+  # ══════════════════════════════════════
+  # STAGE 1 — Build + SAST SonarCloud
+  # ══════════════════════════════════════
   build-and-sast:
     name: "S1 - Build et SAST"
     needs: threat-modeling
     runs-on: ubuntu-latest
-
     continue-on-error: true
 
     steps:
@@ -122,6 +114,99 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
 
+      # Export du rapport SonarQube en JSON via l'API
+      - name: Export SonarQube report (JSON)
+        if: always()
+        run: |
+          pip install requests --quiet
+          python3 << 'PYEOF'
+          import requests, json, os
+
+          token   = os.environ.get("SONAR_TOKEN", "")
+          host    = "https://sonarcloud.io"
+          project = "bfdmm"          # adapter si nécessaire
+
+          metrics = "bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,security_hotspots,sqale_index"
+
+          r = requests.get(
+            f"{host}/api/measures/component",
+            params={"component": project, "metricKeys": metrics},
+            auth=(token, ""),
+            timeout=30,
+          )
+
+          if r.status_code == 200:
+            with open("sonar-report.json", "w") as f:
+              json.dump(r.json(), f, ensure_ascii=False, indent=2)
+            print("Rapport SonarQube exporté -> sonar-report.json")
+          else:
+            print(f"Avertissement : impossible d'exporter le rapport SonarQube ({r.status_code})")
+            # Créer un fichier vide pour ne pas bloquer l'artifact
+            with open("sonar-report.json", "w") as f:
+              json.dump({"error": f"HTTP {r.status_code}"}, f)
+          PYEOF
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # Génération d'un rapport HTML lisible à partir du JSON SonarQube
+      - name: Generate SonarQube HTML report
+        if: always()
+        run: |
+          python3 << 'PYEOF'
+          import json
+
+          try:
+            with open("sonar-report.json") as f:
+              data = json.load(f)
+            measures = {m["metric"]: m.get("value", "N/A")
+                        for m in data.get("component", {}).get("measures", [])}
+          except Exception:
+            measures = {}
+
+          def val(key):
+            return measures.get(key, "N/A")
+
+          html = f"""<!DOCTYPE html>
+          <html lang="fr">
+          <head><meta charset="UTF-8">
+          <title>BFDMM — Rapport SonarQube</title>
+          <style>
+            body {{ font-family: Arial, sans-serif; margin: 2em; background:#f9f9f9; }}
+            h1   {{ color: #1a73e8; }}
+            table{{ border-collapse: collapse; width: 60%; }}
+            th,td{{ border:1px solid #ccc; padding:8px 14px; text-align:left; }}
+            th   {{ background:#1a73e8; color:white; }}
+            tr:nth-child(even){{ background:#e8f0fe; }}
+          </style>
+          </head>
+          <body>
+          <h1>BFDMM — Rapport SonarQube</h1>
+          <table>
+            <tr><th>Métrique</th><th>Valeur</th></tr>
+            <tr><td>Bugs</td><td>{val('bugs')}</td></tr>
+            <tr><td>Vulnérabilités</td><td>{val('vulnerabilities')}</td></tr>
+            <tr><td>Code Smells</td><td>{val('code_smells')}</td></tr>
+            <tr><td>Couverture tests (%)</td><td>{val('coverage')}</td></tr>
+            <tr><td>Duplication (%)</td><td>{val('duplicated_lines_density')}</td></tr>
+            <tr><td>Security Hotspots</td><td>{val('security_hotspots')}</td></tr>
+            <tr><td>Dette technique (min)</td><td>{val('sqale_index')}</td></tr>
+          </table>
+          </body></html>"""
+
+          with open("sonar-report.html", "w") as f:
+            f.write(html)
+          print("sonar-report.html généré")
+          PYEOF
+
+      - name: Upload SAST reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sast-report
+          path: |
+            sonar-report.json
+            sonar-report.html
+
       - name: Upload backend artifact
         uses: actions/upload-artifact@v4
         with:
@@ -135,13 +220,24 @@ jobs:
     name: "S2 - Analyse SCA"
     needs: build-and-sast
     runs-on: ubuntu-latest
-
     continue-on-error: true
 
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
 
+      - name: Resolve Maven dependencies (populate local cache)
+        run: |
+          cd backend
+          mvn dependency:resolve dependency:resolve-plugins -B -q
+
+      # --- Scan filesystem : affichage console ---
       - name: Trivy filesystem scan (table)
         uses: aquasecurity/trivy-action@master
         with:
@@ -151,6 +247,7 @@ jobs:
           exit-code: '0'
           format: 'table'
 
+      # --- Scan filesystem : export JSON ---
       - name: Trivy filesystem scan (JSON)
         uses: aquasecurity/trivy-action@master
         with:
@@ -161,54 +258,55 @@ jobs:
           format: 'json'
           output: 'trivy-sca.json'
 
+      # --- Scan filesystem : export HTML via template ---
+      - name: Trivy filesystem scan (HTML)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: 'backend'
+          severity: 'LOW,MEDIUM,HIGH,CRITICAL'
+          exit-code: '0'
+          format: 'template'
+          template: '@/contrib/html.tpl'
+          output: 'trivy-sca.html'
+
+      # --- Statistiques CVE depuis le JSON ---
       - name: Generate CVE statistics
         if: always()
         run: |
           if [ -f trivy-sca.json ]; then
-          
-             python3 << 'PYEOF'
+            python3 << 'PYEOF'
           import json
-          
+
           with open('trivy-sca.json') as f:
-             data = json.load(f)
-          
-          counts = {
-            'CRITICAL': 0,
-            'HIGH': 0,
-            'MEDIUM': 0,
-            'LOW': 0
-          }
-          
+            data = json.load(f)
+
+          counts = {'CRITICAL': 0, 'HIGH': 0, 'MEDIUM': 0, 'LOW': 0}
+
           for result in data.get('Results', []):
             for vuln in result.get('Vulnerabilities', []):
-          
               sev = vuln.get('Severity', 'LOW')
-          
-              if sev not in counts:
-                counts[sev] = 0
-          
-              counts[sev] += 1
-          
+              counts[sev] = counts.get(sev, 0) + 1
+
           print("=" * 45)
           print(" BFDMM — RAPPORT SCA / CVE")
           print("=" * 45)
-          
           for sev, count in counts.items():
             print(f"{sev:10} : {count}")
-          
           print("=" * 45)
           print(f"TOTAL : {sum(counts.values())}")
           print("=" * 45)
           PYEOF
-          
           fi
 
-      - name: Upload SCA report
+      - name: Upload SCA reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: sca-report
-          path: trivy-sca.json
+          path: |
+            trivy-sca.json
+            trivy-sca.html
 
   # ══════════════════════════════════════
   # STAGE 3 — Containerisation Sécurisée
@@ -217,7 +315,6 @@ jobs:
     name: "S3 - Containerisation"
     needs: sca-analysis
     runs-on: ubuntu-latest
-
     continue-on-error: true
 
     steps:
@@ -257,7 +354,8 @@ jobs:
             -t bfdmm-frontend:${{ github.sha }} \
             frontend/
 
-      - name: Trivy backend image scan
+      # --- Scan image backend : table console ---
+      - name: Trivy backend image scan (table)
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'bfdmm-backend:${{ github.sha }}'
@@ -265,13 +363,67 @@ jobs:
           exit-code: '0'
           format: 'table'
 
-      - name: Trivy frontend image scan
+      # --- Scan image backend : JSON ---
+      - name: Trivy backend image scan (JSON)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'bfdmm-backend:${{ github.sha }}'
+          severity: 'LOW,MEDIUM,HIGH,CRITICAL'
+          exit-code: '0'
+          format: 'json'
+          output: 'trivy-backend-image.json'
+
+      # --- Scan image backend : HTML ---
+      - name: Trivy backend image scan (HTML)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'bfdmm-backend:${{ github.sha }}'
+          severity: 'LOW,MEDIUM,HIGH,CRITICAL'
+          exit-code: '0'
+          format: 'template'
+          template: '@/contrib/html.tpl'
+          output: 'trivy-backend-image.html'
+
+      # --- Scan image frontend : table console ---
+      - name: Trivy frontend image scan (table)
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'bfdmm-frontend:${{ github.sha }}'
           severity: 'HIGH,CRITICAL'
           exit-code: '0'
           format: 'table'
+
+      # --- Scan image frontend : JSON ---
+      - name: Trivy frontend image scan (JSON)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'bfdmm-frontend:${{ github.sha }}'
+          severity: 'LOW,MEDIUM,HIGH,CRITICAL'
+          exit-code: '0'
+          format: 'json'
+          output: 'trivy-frontend-image.json'
+
+      # --- Scan image frontend : HTML ---
+      - name: Trivy frontend image scan (HTML)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'bfdmm-frontend:${{ github.sha }}'
+          severity: 'LOW,MEDIUM,HIGH,CRITICAL'
+          exit-code: '0'
+          format: 'template'
+          template: '@/contrib/html.tpl'
+          output: 'trivy-frontend-image.html'
+
+      - name: Upload container scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-scan-report
+          path: |
+            trivy-backend-image.json
+            trivy-backend-image.html
+            trivy-frontend-image.json
+            trivy-frontend-image.html
 
   # ══════════════════════════════════════
   # STAGE 4 — Déploiement K3s
@@ -280,9 +432,6 @@ jobs:
     name: "S4 - Deploy K3s"
     needs: containerize
     runs-on: ubuntu-latest
-
-    #if: github.ref == 'refs/heads/main'
-
     continue-on-error: true
 
     steps:
@@ -312,9 +461,9 @@ jobs:
             -n bfdmm-staging
           echo "Deploy OK"
 
-      # ==========================================
-    # STAGE 5 - DAST OWASP ZAP
-    # ==========================================
+  # ══════════════════════════════════════
+  # STAGE 5 — DAST OWASP ZAP
+  # ══════════════════════════════════════
   dast-scan:
     name: "S5 - DAST OWASP ZAP"
     needs: sca-analysis
@@ -362,7 +511,7 @@ jobs:
             --spring.datasource.username=bfdmm_user \
             --spring.datasource.password=bfdmm_pass \
             > /tmp/app.log 2>&1 &
-          
+
           echo "Attente demarrage Spring Boot..."
           for i in $(seq 1 30); do
             if curl -sf http://localhost:8080/actuator/health > /dev/null 2>&1; then
@@ -372,7 +521,7 @@ jobs:
             fi
             sleep 2
           done
-            
+
           curl -f http://localhost:8080/actuator/health || {
             echo "ERREUR : app non demarree - logs :"
             cat /tmp/app.log
@@ -382,7 +531,8 @@ jobs:
       - name: Fix ZAP workspace permissions
         run: sudo chmod -R 777 ${{ github.workspace }}
 
-      - name: OWASP ZAP Baseline Scan via Docker
+      # ZAP génère HTML + JSON + MD en une seule exécution
+      - name: OWASP ZAP Baseline Scan
         run: |
           docker run --network=host \
             -v ${{ github.workspace }}:/zap/wrk/:rw \
@@ -395,7 +545,35 @@ jobs:
               -a \
               -I
 
-      - name: Upload ZAP report
+      # Résumé des alertes ZAP depuis le JSON
+      - name: ZAP report summary
+        if: always()
+        run: |
+          if [ -f zap-report.json ]; then
+            python3 << 'PYEOF'
+          import json
+
+          with open('zap-report.json') as f:
+            data = json.load(f)
+
+          counts = {'High': 0, 'Medium': 0, 'Low': 0, 'Informational': 0}
+
+          for alert in data.get('site', [{}])[0].get('alerts', []):
+            risk = alert.get('riskdesc', '').split(' ')[0]
+            counts[risk] = counts.get(risk, 0) + 1
+
+          print("=" * 45)
+          print(" BFDMM — RAPPORT OWASP ZAP")
+          print("=" * 45)
+          for level, count in counts.items():
+            print(f"{level:15} : {count}")
+          print("=" * 45)
+          print(f"TOTAL : {sum(counts.values())}")
+          print("=" * 45)
+          PYEOF
+          fi
+
+      - name: Upload ZAP reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -403,7 +581,7 @@ jobs:
           path: |
             ${{ github.workspace }}/zap-report.html
             ${{ github.workspace }}/zap-report.json
-            ${{ github.workspace }}/zap-report.md  
+            ${{ github.workspace }}/zap-report.md
 
   # ══════════════════════════════════════
   # STAGE 6 — Résumé Final BFDMM
@@ -411,17 +589,13 @@ jobs:
   security-summary:
     name: "S6 - Resume securite"
     needs:
-      [
-        threat-modeling,
-        build-and-sast,
-        sca-analysis,
-        containerize,
-        deploy-staging,
-        dast-scan
-      ]
-
+      - threat-modeling
+      - build-and-sast
+      - sca-analysis
+      - containerize
+      - deploy-staging
+      - dast-scan
     runs-on: ubuntu-latest
-
     if: always()
 
     steps:
@@ -430,7 +604,6 @@ jobs:
           echo "=========================================="
           echo "  BFDMM SECURITY PIPELINE SUMMARY"
           echo "=========================================="
-          
           echo ""
           echo "S0 Threat Modeling : ${{ needs.threat-modeling.result }}"
           echo "S1 Build + SAST    : ${{ needs.build-and-sast.result }}"
@@ -438,16 +611,114 @@ jobs:
           echo "S3 Container Scan  : ${{ needs.containerize.result }}"
           echo "S4 Deploy K3s      : ${{ needs.deploy-staging.result }}"
           echo "S5 DAST OWASP ZAP  : ${{ needs.dast-scan.result }}"
-          
           echo ""
           echo "Commit : ${{ github.sha }}"
           echo "Branch : ${{ github.ref_name }}"
           echo "Date   : $(date -u)"
-          
           echo ""
           echo "Mode pipeline : AUDIT / RESEARCH"
           echo "Framework     : BFDMM"
           echo "Maturity      : N1 -> N3"
-          
           echo "=========================================="
-      
+#
+#  # ══════════════════════════════════════
+#  # STAGE 7 — Export DORA Metrics
+#  # ══════════════════════════════════════
+#  export-dora:
+#    name: "S7 - Export DORA Metrics"
+#    runs-on: ubuntu-latest
+#    needs:
+#      - deploy-staging
+#      - dast-scan        # corrigé : était "dast-zap" (nom inexistant)
+#    if: always()
+#
+#    steps:
+#      - name: Checkout source code
+#        uses: actions/checkout@v4
+#
+#      - name: Setup Python
+#        uses: actions/setup-python@v5
+#        with:
+#          python-version: '3.11'
+#
+#      - name: Install dependencies
+#        run: pip install requests prometheus-client --quiet
+#
+#      - name: Calcul et export métriques DORA
+#        run: |
+#          python3 << 'PYEOF'
+#          import os, time, requests
+#          from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+#
+#          # ---- Calcul des métriques ----
+#          deploy_result = "${{ needs.deploy-staging.result }}"
+#          dast_result   = "${{ needs.dast-scan.result }}"
+#
+#          deploy_success = 1 if deploy_result == "success" else 0
+#          failure_rate   = 0 if deploy_result == "success" else 100
+#
+#          # Lead Time = durée depuis le démarrage du run (en minutes)
+#          import subprocess
+#          start_iso = "${{ github.run_started_at }}"
+#          start_ts  = int(subprocess.check_output(
+#            ["date", "-d", start_iso, "+%s"]
+#          ).decode().strip())
+#          lead_time = round((time.time() - start_ts) / 60, 2)
+#
+#          mttr = 0   # calculé par dora_metrics.py sur historique long terme
+#
+#          print(f"Deployment Frequency : {deploy_success}")
+#          print(f"Lead Time            : {lead_time} min")
+#          print(f"Change Failure Rate  : {failure_rate} %")
+#          print(f"MTTR                 : {mttr} min")
+#
+#          # ---- Export vers Pushgateway ----
+#          pushgateway_url = os.environ.get("PUSHGATEWAY_URL", "")
+#
+#          if not pushgateway_url:
+#            print("PUSHGATEWAY_URL non défini — export ignoré")
+#          else:
+#            registry = CollectorRegistry()
+#
+#            Gauge("bfdmm_pipeline_deployment_success",
+#                  "1 si le déploiement a réussi, 0 sinon",
+#                  registry=registry).set(deploy_success)
+#
+#            Gauge("bfdmm_pipeline_lead_time_minutes",
+#                  "Durée du pipeline en minutes (Lead Time)",
+#                  registry=registry).set(lead_time)
+#
+#            Gauge("bfdmm_pipeline_change_failure_rate",
+#                  "Taux d'échec du déploiement (%)",
+#                  registry=registry).set(failure_rate)
+#
+#            Gauge("bfdmm_pipeline_mttr_minutes",
+#                  "MTTR du pipeline courant",
+#                  registry=registry).set(mttr)
+#
+#            Gauge("bfdmm_pipeline_last_push_timestamp_seconds",
+#                  "Timestamp du dernier push pipeline",
+#                  registry=registry).set(time.time())
+#
+#            push_to_gateway(
+#              pushgateway_url,
+#              job="bfdmm_pipeline",
+#              registry=registry,
+#              grouping_key={"project": "bfdmm", "run": "${{ github.run_id }}"},
+#            )
+#            print(f"Métriques poussées vers {pushgateway_url}")
+#          PYEOF
+#        env:
+#          PUSHGATEWAY_URL: ${{ secrets.PUSHGATEWAY_URL }}
+#
+#      - name: Résumé DORA
+#        if: always()
+#        run: |
+#          echo "========================================"
+#          echo "  BFDMM — DORA PIPELINE METRICS"
+#          echo "========================================"
+#          echo "Deploy result : ${{ needs.deploy-staging.result }}"
+#          echo "DAST result   : ${{ needs.dast-scan.result }}"
+#          echo "Run ID        : ${{ github.run_id }}"
+#          echo "Commit        : ${{ github.sha }}"
+#          echo "========================================"

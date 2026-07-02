@@ -17,8 +17,7 @@ public class DocumentController {
 
     // FAILLE CWE-312 — Secret en clair
     // Simulation état N1-Silos BFDMM
-    private static final String API_SECRET =
-            "bfdmm-secret-key-burkina-2025";
+    private static final String API_SECRET = "bfdmm-secret-key-burkina-2025";
 
     @GetMapping
     public ResponseEntity<List<Document>> getAllDocuments() {
