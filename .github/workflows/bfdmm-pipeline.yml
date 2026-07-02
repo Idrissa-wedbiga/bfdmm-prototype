@@ -237,6 +237,12 @@ jobs:
           cd backend
           mvn dependency:resolve dependency:resolve-plugins -B -q
 
+      - name: Download Trivy HTML template
+        run: |
+          curl -sSL -o html.tpl \
+            https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl
+
+
       # --- Scan filesystem : affichage console ---
       - name: Trivy filesystem scan (table)
         uses: aquasecurity/trivy-action@master
@@ -267,7 +273,7 @@ jobs:
           severity: 'LOW,MEDIUM,HIGH,CRITICAL'
           exit-code: '0'
           format: 'template'
-          template: '@/contrib/html.tpl'
+          template: '@html.tpl'
           output: 'trivy-sca.html'
 
       # --- Statistiques CVE depuis le JSON ---
@@ -354,6 +360,12 @@ jobs:
             -t bfdmm-frontend:${{ github.sha }} \
             frontend/
 
+      - name: Download Trivy HTML template
+        run: |
+          curl -sSL -o html.tpl \
+            https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl
+      
+
       # --- Scan image backend : table console ---
       - name: Trivy backend image scan (table)
         uses: aquasecurity/trivy-action@master
@@ -381,7 +393,7 @@ jobs:
           severity: 'LOW,MEDIUM,HIGH,CRITICAL'
           exit-code: '0'
           format: 'template'
-          template: '@/contrib/html.tpl'
+          template: '@html.tpl'
           output: 'trivy-backend-image.html'
 
       # --- Scan image frontend : table console ---
@@ -411,7 +423,7 @@ jobs:
           severity: 'LOW,MEDIUM,HIGH,CRITICAL'
           exit-code: '0'
           format: 'template'
-          template: '@/contrib/html.tpl'
+          template: '@html.tpl'
           output: 'trivy-frontend-image.html'
 
       - name: Upload container scan reports
