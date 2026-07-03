@@ -594,103 +594,104 @@ jobs:
             ${{ github.workspace }}/zap-report.html
             ${{ github.workspace }}/zap-report.json
             ${{ github.workspace }}/zap-report.md
-    # ══════════════════════════════════════
-    # STAGE 5bis — DAST OWASP ZAP (Frontend)
-    # ══════════════════════════════════════
-    dast-scan-frontend:
-      name: "S5 - DAST OWASP ZAP (Frontend)"
-      needs: sca-analysis
-      runs-on: ubuntu-latest
-      continue-on-error: true
-      permissions:
-        issues: write
-        contents: read
-      steps:
-        - name: Checkout source code
-          uses: actions/checkout@v4
+  # ══════════════════════════════════════
+  # STAGE 5bis — DAST OWASP ZAP (Frontend)
+  # ══════════════════════════════════════
+  dast-scan-frontend:
+    name: "S5 - DAST OWASP ZAP (Frontend)"
+    needs: sca-analysis
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
 
-        - name: Start stack (postgres + backend + frontend)
-          run: |
-            docker compose up --build -d postgres backend frontend
-            echo "Attente demarrage Backend..."
-            for i in $(seq 1 30); do
-              if curl -sf http://localhost:8080/actuator/health > /dev/null 2>&1; then
-                echo "Backend demarre apres ${i}x2s"
-                break
-              fi
-              sleep 2
-            done
-            curl -f http://localhost:8080/actuator/health || {
-              echo "ERREUR : Backend non demarre"
-              docker compose logs backend
-              exit 1
-            }
-            echo "Attente demarrage Frontend..."
-            for i in $(seq 1 30); do
-              if curl -sf http://localhost:80 > /dev/null 2>&1; then
-                echo "Frontend demarre apres ${i}x2s"
-                break
-              fi
-              sleep 2
-            done
-            curl -f http://localhost:80 || {
-              echo "ERREUR : Frontend non demarre"
-              docker compose logs frontend
-              exit 1
-            }
-
-        - name: Fix ZAP workspace permissions
-          run: sudo chmod -R 777 ${{ github.workspace }}
-
-        - name: OWASP ZAP Baseline Scan
-          run: |
-            docker run --network=host \
-              -v ${{ github.workspace }}:/zap/wrk/:rw \
-              ghcr.io/zaproxy/zaproxy:stable \
-              zap-baseline.py \
-                -t http://localhost:80 \
-                -r frontend-zap-report.html \
-                -J frontend-zap-report.json \
-                -w frontend-zap-report.md \
-                -a \
-                -I
-
-        - name: ZAP report summary
-          if: always()
-          run: |
-            if [ -f frontend-zap-report.json ]; then
-              python3 << 'PYEOF'
-            import json
-            with open('frontend-zap-report.json') as f:
-              data = json.load(f)
-            counts = {'High': 0, 'Medium': 0, 'Low': 0, 'Informational': 0}
-            for alert in data.get('site', [{}])[0].get('alerts', []):
-              risk = alert.get('riskdesc', '').split(' ')[0]
-              counts[risk] = counts.get(risk, 0) + 1
-            print("=" * 45)
-            print(" BFDMM — RAPPORT OWASP ZAP (Frontend)")
-            print("=" * 45)
-            for level, count in counts.items():
-              print(f"{level:15} : {count}")
-            print("=" * 45)
-            print(f"TOTAL : {sum(counts.values())}")
-            print("=" * 45)
-            PYEOF
+      - name: Start stack (postgres + backend + frontend)
+        run: |
+          docker compose up --build -d postgres backend frontend
+          echo "Attente demarrage Backend..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/actuator/health > /dev/null 2>&1; then
+              echo "Backend demarre apres ${i}x2s"
+              break
             fi
+            sleep 2
+          done
+          curl -f http://localhost:8080/actuator/health || {
+            echo "ERREUR : Backend non demarre"
+            docker compose logs backend
+            exit 1
+          }
+          echo "Attente demarrage Frontend..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:80 > /dev/null 2>&1; then
+              echo "Frontend demarre apres ${i}x2s"
+              break
+            fi
+            sleep 2
+          done
+          curl -f http://localhost:80 || {
+            echo "ERREUR : Frontend non demarre"
+            docker compose logs frontend
+            exit 1
+          }
 
-        - name: Stop stack
-          if: always()
-          run: docker compose down -v
+      - name: Fix ZAP workspace permissions
+        run: sudo chmod -R 777 ${{ github.workspace }}
 
-        - name: Upload ZAP reports
-          if: always()
-          uses: actions/upload-artifact@v4
-          with:
-            name: zap-report-frontend
-            path: |
-              ${{ github.workspace }}/frontend-zap-report.html
-              ${{ github.workspace }}/frontend-zap-report.json
-              ${{ github.workspace }}/frontend-zap-report.md
+      - name: OWASP ZAP Baseline Scan
+        run: |
+          docker run --network=host \
+            -v ${{ github.workspace }}:/zap/wrk/:rw \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+              -t http://localhost:80 \
+              -r frontend-zap-report.html \
+              -J frontend-zap-report.json \
+              -w frontend-zap-report.md \
+              -a \
+              -I
+
+      - name: ZAP report summary
+        if: always()
+        run: |
+          if [ -f frontend-zap-report.json ]; then
+            python3 << 'PYEOF'
+          import json
+          with open('frontend-zap-report.json') as f:
+            data = json.load(f)
+          counts = {'High': 0, 'Medium': 0, 'Low': 0, 'Informational': 0}
+          for alert in data.get('site', [{}])[0].get('alerts', []):
+            risk = alert.get('riskdesc', '').split(' ')[0]
+            counts[risk] = counts.get(risk, 0) + 1
+          print("=" * 45)
+          print(" BFDMM — RAPPORT OWASP ZAP (Frontend)")
+          print("=" * 45)
+          for level, count in counts.items():
+            print(f"{level:15} : {count}")
+          print("=" * 45)
+          print(f"TOTAL : {sum(counts.values())}")
+          print("=" * 45)
+          PYEOF
+          fi
+
+      - name: Stop stack
+        if: always()
+        run: docker compose down -v
+
+      - name: Upload ZAP reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report-frontend
+          path: |
+            ${{ github.workspace }}/frontend-zap-report.html
+            ${{ github.workspace }}/frontend-zap-report.json
+            ${{ github.workspace }}/frontend-zap-report.md
+
   # ══════════════════════════════════════
   # STAGE 6 — Résumé Final BFDMM
   # ══════════════════════════════════════
