@@ -1617,7 +1617,7 @@ jobs:
           echo "╠══════════════════════════════════════════════════════════════════════════════════╣"
           echo "║                                                                                  ║"
           echo "║  🏷️  Pipeline  : BFDMM Security Pipeline v2.0                                    ║"
-          echo "║  📊 Maturity  : N1 → N3 (Defined)                                                ║ "
+          echo "║  📊 Maturity  : N1 → N3 (Defined)                                                 ║"
           echo "║  🔒 Framework : DevSecOps                                                         ║"
           echo "║                                                                                  ║"
           echo "╚══════════════════════════════════════════════════════════════════════════════════╝"
